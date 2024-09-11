@@ -1,0 +1,20 @@
+{
+  "name": "addbot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "functions-framework --target=bot",
+    "deploy": "gcloud functions deploy bot --gen2 --trigger-http --runtime='nodejs20' --entry-point=bot --region=us-central1 --allow-unauthenticated"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google-cloud/bigquery": "^7.8.0",
+    "@google-cloud/bigquery-storage": "^4.8.0",
+    "@google-cloud/functions": "^3.4.0",
+    "@google-cloud/functions-framework": "^3.4.1",
+    "@google-cloud/scheduler": "^4.3.0",
+    "cors": "^2.8.5"
+  }
+}

@@ -1,0 +1,127 @@
+# openapi2-functions.yaml
+swagger: "2.0"
+info:
+  title: alerts description
+  description: API Gateway with a Google Cloud Functions backend
+  version: 1.0.0
+schemes:
+  - https
+produces:
+  - application/json
+paths:
+  /bot:
+    post:
+      summary: add bot
+      operationId: addBot
+      x-google-backend:
+        address: https://us-central1-cald-ads-qa.cloudfunctions.net/bot
+      responses:
+        "200":
+          description: A successful response
+          schema:
+            type: string
+    get:
+      summary: get bot
+      operationId: getBot
+      x-google-backend:
+        address: https://us-central1-cald-ads-qa.cloudfunctions.net/bot
+      responses:
+        "200":
+          description: A successful response
+          schema:
+            type: string
+  /bot/{botId}:
+    delete:
+      summary: delete bot
+      operationId: deleteBot
+      x-google-backend:
+        address: https://us-central1-cald-ads-qa.cloudfunctions.net
+        path_translation: APPEND_PATH_TO_ADDRESS
+      parameters:
+        - in: path
+          name: botId
+          required: true
+          type: integer
+      responses:
+        "200":
+          description: A successful response
+          schema:
+            type: string
+    patch:
+      summary: patch bot
+      operationId: patchBot
+      x-google-backend:
+        address: https://us-central1-cald-ads-qa.cloudfunctions.net
+        path_translation: APPEND_PATH_TO_ADDRESS
+      parameters:
+        - in: path
+          name: botId
+          required: true
+          type: integer
+      responses:
+        "200":
+          description: A successful response
+          schema:
+            type: string
+
+  /bot/run/{botId}:
+    post:
+      summary: run bot
+      operationId: runBot
+      x-google-backend:
+        address: https://us-central1-cald-ads-qa.cloudfunctions.net
+        path_translation: APPEND_PATH_TO_ADDRESS
+      parameters:
+        - in: path
+          name: botId
+          required: true
+          type: integer
+      responses:
+        "200":
+          description: A successful response
+          schema:
+            type: string
+
+  /integrationType:
+    get:
+      summary: get integration type
+      operationId: integrationType
+      x-google-backend:
+        address: https://us-central1-cald-ads-qa.cloudfunctions.net/integrationType
+      responses:
+        "200":
+          description: A successful response
+          schema:
+            type: string
+  /integration:
+    get:
+      summary: get integration
+      operationId: getIntegration
+      x-google-backend:
+        address: https://us-central1-cald-ads-qa.cloudfunctions.net/integration
+      responses:
+        "200":
+          description: A successful response
+          schema:
+            type: string
+    post:
+      summary: add integration
+      operationId: addIntegration
+      x-google-backend:
+        address: https://us-central1-cald-ads-qa.cloudfunctions.net/integration
+      responses:
+        "200":
+          description: A successful response
+          schema:
+            type: string
+  /integrationByUser:
+    get:
+      summary: get integration by user
+      operationId: getIntegrationByUser
+      x-google-backend:
+        address: https://us-central1-cald-ads-qa.cloudfunctions.net/integration
+      responses:
+        "200":
+          description: A successful response
+          schema:
+            type: string
