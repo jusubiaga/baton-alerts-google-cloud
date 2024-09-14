@@ -20,6 +20,7 @@ const PROJECTID = "cald-ads-qa";
 const LOCATION = "us-central1";
 const DATA_SOURCE = "Alerts";
 const TABLE = "bots";
+const TABLE_RULES = "rules";
 const TOPIC = "bot-execution";
 
 const bigquery = new BigQuery({ projectId: PROJECTID });
@@ -27,6 +28,60 @@ const schedulerClient = new CloudSchedulerClient();
 const functionsClient = new FunctionServiceClient();
 
 // FUNCTIONS
+const getData = async () => {
+  const tableBot = `${PROJECTID}.${DATA_SOURCE}.${TABLE}`;
+  const tableRules = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RULES}`;
+
+  const query = `
+SELECT bots.id as id, rule, frequency, user, name, description, avatar, job 
+FROM ${tableBot} as bots
+LEFT JOIN ${tableRules} as rules ON
+bots.rule = rules.id`;
+
+  // SELECT *
+  //  FROM ${table}`;
+
+  console.log(query);
+
+  const options = {
+    query: query,
+    location: "US",
+  };
+
+  // create query
+  const [job] = await bigquery.createQueryJob(options);
+  // Wait for the query to finish
+  const [rows] = await job.getQueryResults();
+
+  return rows;
+};
+
+const getDataById = async (id) => {
+  const tableBot = `${PROJECTID}.${DATA_SOURCE}.${TABLE}`;
+  const tableRules = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RULES}`;
+
+  const query = `
+SELECT bots.id as id, rule, frequency, user, name, description, avatar, job 
+FROM ${tableBot} as bots
+LEFT JOIN ${tableRules} as rules ON
+bots.rule = rules.id
+   WHERE bots.id = "${id}"`;
+
+  console.log(query);
+
+  const options = {
+    query: query,
+    location: "US",
+  };
+
+  // create query
+  const [job] = await bigquery.createQueryJob(options);
+  // Wait for the query to finish
+  const [rows] = await job.getQueryResults();
+
+  return rows[0] ?? null;
+};
+
 const add = async (data) => {
   const query = `
   INSERT INTO  ${PROJECTID}.${DATA_SOURCE}.${TABLE}
@@ -49,45 +104,6 @@ const add = async (data) => {
 
   // Wait for the query to finish
   await job.getQueryResults();
-
-  // const destinationTable = `projects/${PROJECTID}/datasets/${DATA_SOURCE}/tables/${TABLE}`;
-  // const writeClient = new WriterClient({ PROJECTID });
-
-  // try {
-  //   const writeStream = await writeClient.getWriteStream({
-  //     streamId: `${destinationTable}/streams/_default`,
-  //     view: "FULL",
-  //   });
-  //   const protoDescriptor = adapt.convertStorageSchemaToProto2Descriptor(writeStream.tableSchema, "root");
-
-  //   const connection = await writeClient.createStreamConnection({
-  //     streamId: managedwriter.DefaultStream,
-  //     destinationTable,
-  //   });
-  //   const streamId = connection.getStreamId();
-
-  //   const writer = new JSONWriter({
-  //     streamId,
-  //     connection,
-  //     protoDescriptor,
-  //   });
-
-  //   let rows = [];
-  //   const pendingWrites = [];
-
-  //   rows.push(data);
-
-  //   // Send batch.
-  //   let pw = writer.appendRows(rows);
-  //   pendingWrites.push(pw);
-
-  //   const results = await Promise.all(pendingWrites.map((pw) => pw.getResult()));
-  //   console.log("Write results:", results);
-  // } catch (err) {
-  //   console.log(err);
-  // } finally {
-  //   writeClient.close();
-  // }
 };
 
 const getFuntion = async (name) => {
@@ -99,8 +115,27 @@ const getFuntion = async (name) => {
   console.log(response?.name);
 };
 
-const createJob = async (job) => {
+const createJob = async (jobName, frequency, jobDataJson) => {
+  if (!jobName || !frequency || !jobDataJson) {
+    return "";
+  }
+
+  console.log("createJob", jobName, frequency, jobDataJson);
   // Construct request
+  const job = {
+    name: `projects/${PROJECTID}/locations/${LOCATION}/jobs/${jobName}`,
+    description: "Job created",
+    schedule: frequency,
+    time_zone: "UTC",
+    pubsubTarget: {
+      topicName: `projects/${PROJECTID}/topics/${TOPIC}`,
+      data: Buffer.from(JSON.stringify(jobDataJson)),
+      attributes: {
+        project: PROJECTID,
+      },
+    },
+  };
+
   console.log("createJob ...");
   const request = {
     parent: `projects/${PROJECTID}/locations/${LOCATION}`,
@@ -113,23 +148,116 @@ const createJob = async (job) => {
   return response[0].name;
 };
 
-const updateJob = async (jobId, data) => {
-  const job = schedulerClient.jobPath(PROJECTID, LOCATION, jobId);
+const deleteBot = async (id) => {
+  const tableBot = `${PROJECTID}.${DATA_SOURCE}.${TABLE}`;
+  const bot = await getDataById(id);
+  if (!bot) {
+    return null;
+  }
+  // delete the schedurer
 
-  const { schedule } = data;
+  if (bot.job) {
+    console.log("deleteBot:  delete the schedurer");
+    // Construct request
+    const request = {
+      name: bot.job,
+    };
 
-  const request = {
-    job: {
-      name: job,
-      schedule,
-    },
-    updateMask: {
-      paths: ["schedule"],
-    },
+    // Run request
+    try {
+      await schedulerClient.deleteJob(request);
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+
+  // delete bot
+  const query = `
+DELETE ${tableBot}
+WHERE id = "${id}"`;
+
+  console.log(query);
+
+  const options = {
+    query: query,
+    location: "US",
   };
-  const [response] = await schedulerClient.updateJob(request);
-  console.log(`Updated job: ${response.name}`);
-  return response;
+
+  // create query
+  console.log("deleteBot:  delete bot");
+  const [job] = await bigquery.createQueryJob(options);
+  // Wait for the query to finish
+  const [rows] = await job.getQueryResults();
+
+  return rows[0] ?? null;
+};
+
+const updateData = async (id, data) => {
+  const table = `${PROJECTID}.${DATA_SOURCE}.${TABLE}`;
+
+  console.log("updateData: ", data);
+  const query = `UPDATE ${table} SET 
+   job = "${data?.job}",
+   frequency = "${data?.frequency}"
+  WHERE id = "${id}"`;
+
+  console.log(query);
+
+  const options = {
+    query: query,
+    location: "US",
+  };
+
+  // create query
+  const [job] = await bigquery.createQueryJob(options);
+  // Wait for the query to finish
+  const [rows] = await job.getQueryResults();
+
+  return data;
+};
+
+const updateBot = async (id, data) => {
+  const bot = await getDataById(id);
+
+  if (!bot) {
+    return null;
+  }
+
+  let newJobName = "";
+  const { frequency } = data;
+
+  console.log("updateBot: ", bot);
+
+  if (!bot?.job) {
+    console.log("updateBot: creating job");
+    const jobDataJson = { id: bot.id, user: bot.user, rule: bot.rule };
+    const jobName = `${bot.user}-${bot.rule}`;
+    const { frequency } = data;
+    newJobName = await createJob(jobName, frequency, jobDataJson);
+    // await updateData(id, { job, frequency: schedule });
+
+    // return job;
+  } else {
+    console.log("updateBot: updating job");
+
+    //schedulerClient.jobPath(PROJECTID, LOCATION, bot?.job);
+
+    const request = {
+      job: {
+        name: bot?.job,
+        schedule: frequency,
+      },
+      updateMask: {
+        paths: ["schedule"],
+      },
+    };
+    const [response] = await schedulerClient.updateJob(request);
+    console.log(`Updated job: ${response.name}`);
+    // return response;
+  }
+
+  const rep = await updateData(id, { job: !bot?.job ? newJobName : bot?.job, frequency });
+  return rep;
 };
 
 const enabledJob = async (jobId, enabled) => {
@@ -151,7 +279,12 @@ const enabledJob = async (jobId, enabled) => {
   return response;
 };
 
-const runJob = async (jobId) => {
+const runBot = async (id) => {
+  const bot = await getDataById(id);
+  if (!bot) {
+    return null;
+  }
+
   // Construct request
   let response = {
     code: 0,
@@ -160,16 +293,17 @@ const runJob = async (jobId) => {
   };
 
   try {
-    const job = schedulerClient.jobPath(PROJECTID, LOCATION, jobId);
+    // const job = schedulerClient.jobPath(PROJECTID, LOCATION, jobId);
+    const { job } = bot;
     const request = {
       name: job,
     };
 
-    console.log("RUN: ", jobId);
+    console.log("RUN: ", job);
 
     return { data: await schedulerClient.runJob(request) };
   } catch (error) {
-    console.log("RUN ERROR: ", jobId);
+    console.log("RUN ERROR: ", job);
     return { ...response, error: error.details, code: error.code };
   }
 };
@@ -177,6 +311,7 @@ const runJob = async (jobId) => {
 // ROUTES
 app.get("/", async function (req, res) {
   try {
+    const data = await getData();
     res.status(200).json(data);
   } catch (error) {
     res.send(`ERROR ${error}`);
@@ -184,7 +319,12 @@ app.get("/", async function (req, res) {
 });
 
 app.get("/:id", async function (req, res) {
+  console.log("Param: ", req.params);
+
+  const id = req.params.id;
+
   try {
+    const data = await getDataById(id);
     res.status(200).json(data);
   } catch (error) {
     res.send(`ERROR ${error}`);
@@ -197,25 +337,14 @@ app.post("/", async function (req, res) {
   console.log("Waiting ...");
 
   try {
-    await getFuntion(`projects/${PROJECTID}/locations/${LOCATION}/functions/${rule}`);
+    // await getFuntion(`projects/${PROJECTID}/locations/${LOCATION}/functions/${rule}`);
 
     const id = v4();
-    const jobDataJson = { id, user };
+
+    const jobDataJson = { id, user, rule };
 
     const jobName = `${user}-${rule}`;
-    const job = await createJob({
-      name: `projects/${PROJECTID}/locations/${LOCATION}/jobs/${jobName}`,
-      description: "Job created",
-      schedule: frequency,
-      time_zone: "UTC",
-      pubsubTarget: {
-        topicName: `projects/${PROJECTID}/topics/${TOPIC}`,
-        data: Buffer.from(JSON.stringify(jobDataJson)),
-        attributes: {
-          project: PROJECTID,
-        },
-      },
-    });
+    const job = await createJob(jobName, frequency, jobDataJson);
 
     const createdAt = bigquery.timestamp(new Date()).value;
     const data = { id, createdAt, ...req.body, job };
@@ -233,18 +362,18 @@ app.patch("/:id", async function (req, res) {
   console.log("body: ", req.body);
   console.log("Param: ", req.params);
 
-  const jobID = req.params.id;
+  const id = req.params.id;
 
-  const job = await updateJob(jobID, req.body);
-  res.status(200).json({ job });
+  const bot = await updateBot(id, req.body);
+  res.status(200).json({ bot });
 });
 
 app.delete("/:id", async function (req, res) {
   const { id } = req.params;
   const { body } = req;
 
-  console.log(body);
-  console.log(id);
+  const response = await deleteBot(id);
+  res.status(200).json(response);
 });
 
 app.post("/run/:id", async function (req, res) {
@@ -253,12 +382,12 @@ app.post("/run/:id", async function (req, res) {
 
   const { id } = req.params;
 
-  const response = await runJob(id);
+  const response = await runBot(id);
   console.log(response);
-  if (response.code === 0) {
-    res.status(200).json({ response });
+  if (response) {
+    res.status(200).json(response?.data[0]);
   } else {
-    res.status(404).json({ response });
+    res.status(404).json({});
   }
 });
 

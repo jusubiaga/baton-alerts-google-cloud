@@ -125,3 +125,25 @@ paths:
           description: A successful response
           schema:
             type: string
+  /rules:
+    get:
+      summary: get rules type
+      operationId: rules
+      x-google-backend:
+        address: https://us-central1-cald-ads-qa.cloudfunctions.net/rules
+      responses:
+        "200":
+          description: A successful response
+          schema:
+            type: string
+  /runlog:
+    get:
+      summary: get runlog type
+      operationId: runlog
+      x-google-backend:
+        address: https://us-central1-cald-ads-qa.cloudfunctions.net/runlog
+      responses:
+        "200":
+          description: A successful response
+          schema:
+            type: string

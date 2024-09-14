@@ -25,7 +25,7 @@ CREATE AN API CONFIG:
 gcloud api-gateway api-configs create alerts-config --api=alerts-api --openapi-spec=openapi-functions.yaml --project=cald-ads-qa --backend-auth-service-account=cald-ads-qa@appspot.gserviceaccount.com
 
 UPDATE 
-gcloud api-gateway api-configs create alerts-configv9 --api=alerts-api --openapi-spec=openapi-functions.yaml --project=cald-ads-qa --backend-auth-service-account=cald-ads-qa@appspot.gserviceaccount.com
+gcloud api-gateway api-configs create alerts-configv2 --api=alerts-api --openapi-spec=openapi-functions.yaml --project=cald-ads-qa --backend-auth-service-account=cald-ads-qa@appspot.gserviceaccount.com
 
 ENABLE API:
 
@@ -37,4 +37,4 @@ CREATE A GATEWAY:
 gcloud api-gateway gateways create alerts-api --api=alerts-api --api-config=alerts-config --location=us-central1 --project=cald-ads-qa
 
 UPDATE:
-gcloud api-gateway gateways update alerts-api --api=alerts-api --api-config=alerts-configv9 --location=us-central1 --project=cald-ads-qa
+gcloud api-gateway gateways update alerts-api --api=alerts-api --api-config=alerts-configv2 --location=us-central1 --project=cald-ads-qa

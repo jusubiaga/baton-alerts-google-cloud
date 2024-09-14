@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "functions-framework --target=runBotGUD",
-    "deploy": "gcloud functions deploy runBotGUD --gen2 --trigger-http --runtime='nodejs20' --entry-point=runBotGUD --region=us-central1"
+    "deploy": "gcloud functions deploy runBotGUD --gen2 --trigger-topic bot-execution --runtime='nodejs20' --entry-point=runBotGUD --region=us-central1 "
   },
   "author": "",
   "license": "ISC",
