@@ -6,6 +6,7 @@ const PROJECTID = "cald-ads-qa";
 const DATA_SOURCE = "Alerts";
 const TABLE = "runLog";
 const TABLE_RUNLOG_DETAIL = "runLogDetail";
+const TABLE_BOT = "bots";
 
 const DATA_SOURCE_CAMPAGIN = "Alerts";
 const TABLE_CAMPAGIN = "CampaingAssets";
@@ -55,12 +56,13 @@ const updateRunLog = async (id, status) => {
 
 const addRunLogDetail = async (id, rows) => {
   if (rows.length > 0) {
+    console.log(`Insert RUNLOG DETAILS ...`, rows);
     let insert = `INSERT INTO ${PROJECTID}.${DATA_SOURCE}.${TABLE_RUNLOG_DETAIL}
-    (id, campagin_id, campagin_name, group_id, gruop_name, count) VALUES `;
+    (id, campagin_id, campagin_name, group_id, gruop_name, count, diff, status) VALUES `;
 
     let values = "";
     rows.forEach((row, index) => {
-      values += `("${id}", "${row.campagin_id}", "${row.campagin_name}", "${row.group_id}", "${row.gruop_name}", ${row.headline})`;
+      values += `("${id}", "${row.campagin_id}", "${row.campagin_name}", "${row.group_id}", "${row.gruop_name}", ${row.headline}, ${row?.diff}, "${row?.status}")`;
       index < rows.length - 1 ? (values += ",") : (values += "");
     });
 
@@ -73,10 +75,38 @@ const addRunLogDetail = async (id, rows) => {
   }
 };
 
-const runProcess = async (id) => {
+const getDataById = async (id) => {
+  const tableBot = `${PROJECTID}.${DATA_SOURCE}.${TABLE_BOT}`;
+
+  const query = `
+    SELECT id, rule, minimumNumber  
+    FROM ${tableBot} as bots
+    WHERE bots.id = "${id}"`;
+
+  console.log(query);
+
+  const options = {
+    query: query,
+    location: "US",
+  };
+
+  // create query
+  const [job] = await bigquery.createQueryJob(options);
+  // Wait for the query to finish
+  const [rows] = await job.getQueryResults();
+
+  return rows[0] ?? null;
+};
+
+const runProcess = async (id, botId) => {
+  const bot = await getDataById(botId);
+
+  console.log("RUNPROCESS: ", bot);
+  const minimumNumber = bot && bot?.minimumNumber ? bot?.minimumNumber : 0;
+
   try {
     const query = `
-    SELECT campagin_id, MAX(\` campagin_name\`) as campagin_name, group_id, MAX(group_name) as gruop_name, count(*) as headline 
+    SELECT campagin_id, MAX(\` campagin_name\`) as campagin_name, group_id, MAX(group_name) as gruop_name, count(*) as headline, count(*) - ${minimumNumber} as diff, IF(count(*)>${minimumNumber}, "Headlines missing","No Issues") as status 
     FROM \`cald-ads-qa.AssetTest.CampaingAssets\`
     WHERE asset_type = "Headline"
     GROUP BY campagin_id, group_id
@@ -123,7 +153,7 @@ functions.cloudEvent("runBotGUD", async (cloudEvent) => {
       error: "",
     });
 
-    await runProcess(id);
+    await runProcess(id, dataJson?.id);
     console.log("DONE!");
   } catch (error) {
     console.log("ERROR! ", error);
@@ -139,14 +169,14 @@ functions.cloudEvent("runBotGUD", async (cloudEvent) => {
 //       const data = await addRunLog({
 //         id,
 //         createdAt: bigquery.timestamp(new Date()).value,
-//         user: "dataJson?.user",
-//         rule: "dataJson?.rule",
-//         botId: "dataJson?.id",
+//         user: "clzotyc8e0010l7wtqbtgz168",
+//         rule: "GUP",
+//         botId: "9988a522-49a6-437a-97a4-637e7ba37682",
 //         status: "RUNNING",
 //         error: "",
 //       });
 
-//       await runProcess(id);
+//       await runProcess(id, "9988a522-49a6-437a-97a4-637e7ba37682");
 //       res.status(200).json(data);
 //     } catch (error) {
 //       res.send(`ERROR ${error}`);

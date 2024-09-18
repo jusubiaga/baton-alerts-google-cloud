@@ -33,7 +33,7 @@ const getData = async () => {
   const tableRules = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RULES}`;
 
   const query = `
-SELECT bots.id as id, rule, frequency, user, name, description, avatar, job 
+SELECT bots.id as id, rule, frequency, user, name, description, avatar, job, minimumNumber  
 FROM ${tableBot} as bots
 LEFT JOIN ${tableRules} as rules ON
 bots.rule = rules.id`;
@@ -56,16 +56,54 @@ bots.rule = rules.id`;
   return rows;
 };
 
+const getDataByUser = async (user) => {
+  const tableBot = `${PROJECTID}.${DATA_SOURCE}.${TABLE}`;
+  const tableRules = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RULES}`;
+
+  const query = `
+    SELECT bots.id as id, rule, frequency, user, name, description, avatar, job, minimumNumber 
+    FROM ${tableBot} as bots
+    JOIN ${tableRules} as rules ON
+    bots.rule = rules.id AND
+    bots.user = "${user}"`;
+
+  // SELECT *
+  //  FROM ${table}`;
+
+  console.log(query);
+
+  const options = {
+    query: query,
+    location: "US",
+  };
+
+  // create query
+  const [job] = await bigquery.createQueryJob(options);
+  // Wait for the query to finish
+  const [rows] = await job.getQueryResults();
+
+  const result = await Promise.all(
+    rows.map(async (row) => {
+      const jobData = await getJob(row.job);
+      const data = { ...row, ...jobData };
+      console.log("DATA: ", data);
+      return data;
+    })
+  );
+
+  return result;
+};
+
 const getDataById = async (id) => {
   const tableBot = `${PROJECTID}.${DATA_SOURCE}.${TABLE}`;
   const tableRules = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RULES}`;
 
   const query = `
-SELECT bots.id as id, rule, frequency, user, name, description, avatar, job 
-FROM ${tableBot} as bots
-LEFT JOIN ${tableRules} as rules ON
-bots.rule = rules.id
-   WHERE bots.id = "${id}"`;
+    SELECT bots.id as id, rule, frequency, user, name, description, avatar, job, minimumNumber  
+    FROM ${tableBot} as bots
+    LEFT JOIN ${tableRules} as rules ON
+    bots.rule = rules.id
+    WHERE bots.id = "${id}"`;
 
   console.log(query);
 
@@ -82,7 +120,8 @@ bots.rule = rules.id
   return rows[0] ?? null;
 };
 
-const add = async (data) => {
+const addBot = async (data) => {
+  console.log("DATA:", data);
   const query = `
   INSERT INTO  ${PROJECTID}.${DATA_SOURCE}.${TABLE}
   (id, createdAt, user, rule, frequency, job)
@@ -90,8 +129,8 @@ const add = async (data) => {
       "${data.createdAt}",
       "${data.user}",
       "${data.rule}",
-      "${data.frequency}",
-      "${data.job}")`;
+      "${data?.schedule ?? ""}",
+      "${data?.job ?? ""}")`;
 
   const options = {
     query: query,
@@ -143,9 +182,50 @@ const createJob = async (jobName, frequency, jobDataJson) => {
   };
 
   // Run request
-  const response = await schedulerClient.createJob(request);
-  console.log(response[0].name);
-  return response[0].name;
+  const [response] = await schedulerClient.createJob(request);
+  return {
+    job: response.name,
+    nextRunDate: getScheduleTime(response.scheduleTime),
+    lastRunDate: getScheduleTime(response.lastAttemptTime),
+    state: response.state,
+    schedule: response.schedule,
+  };
+};
+
+const getScheduleTime = (scheduleTime) => {
+  if (scheduleTime) {
+    const { seconds, nanos } = scheduleTime;
+    const timestamp = parseInt(seconds) * 1000 + Math.floor(nanos / 1000000);
+    const date = new Date(timestamp);
+    return date.toISOString();
+  }
+  return "";
+};
+
+const getJob = async (jobId) => {
+  let jobData = { nextRunDate: null, lastRunDate: null, state: null, schedule: null };
+  if (jobId) {
+    // Construct request
+    const request = {
+      name: jobId,
+    };
+
+    // Run request
+    try {
+      const job = await schedulerClient.getJob(request);
+      jobData = {
+        ...jobData,
+        nextRunDate: getScheduleTime(job[0].scheduleTime),
+        lastRunDate: getScheduleTime(job[0].lastAttemptTime),
+        state: job[0].state,
+        schedule: job[0].schedule,
+      };
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+
+  return jobData;
 };
 
 const deleteBot = async (id) => {
@@ -197,9 +277,10 @@ const updateData = async (id, data) => {
 
   console.log("updateData: ", data);
   const query = `UPDATE ${table} SET 
-   job = "${data?.job}",
-   frequency = "${data?.frequency}"
-  WHERE id = "${id}"`;
+    job = "${data?.job}",
+    frequency = "${data?.schedule}",
+    minimumNumber = ${data?.minimumNumber}
+    WHERE id = "${id}"`;
 
   console.log(query);
 
@@ -223,25 +304,18 @@ const updateBot = async (id, data) => {
     return null;
   }
 
-  let newJobName = "";
-  const { frequency } = data;
+  const { frequency, minimumNumber } = data;
+  let dataJob = {};
 
-  console.log("updateBot: ", bot);
-
+  // create new job
   if (!bot?.job) {
     console.log("updateBot: creating job");
     const jobDataJson = { id: bot.id, user: bot.user, rule: bot.rule };
     const jobName = `${bot.user}-${bot.rule}`;
-    const { frequency } = data;
-    newJobName = await createJob(jobName, frequency, jobDataJson);
-    // await updateData(id, { job, frequency: schedule });
-
-    // return job;
+    dataJob = await createJob(jobName, frequency, jobDataJson);
   } else {
+    // update job
     console.log("updateBot: updating job");
-
-    //schedulerClient.jobPath(PROJECTID, LOCATION, bot?.job);
-
     const request = {
       job: {
         name: bot?.job,
@@ -252,11 +326,20 @@ const updateBot = async (id, data) => {
       },
     };
     const [response] = await schedulerClient.updateJob(request);
-    console.log(`Updated job: ${response.name}`);
+    dataJob = {
+      job: response.name,
+      nextRunDate: getScheduleTime(response.scheduleTime),
+      lastRunDate: getScheduleTime(response.lastAttemptTime),
+      state: response.state,
+      schedule: response.schedule,
+    };
+
+    console.log("Updated job: ", dataJob);
     // return response;
   }
 
-  const rep = await updateData(id, { job: !bot?.job ? newJobName : bot?.job, frequency });
+  // const rep = await updateData(id, { job: !bot?.job ? newJobName : bot?.job, frequency });
+  const rep = await updateData(id, { ...dataJob, minimumNumber });
   return rep;
 };
 
@@ -310,8 +393,15 @@ const runBot = async (id) => {
 
 // ROUTES
 app.get("/", async function (req, res) {
+  const { user } = req.query;
+  let data;
   try {
-    const data = await getData();
+    if (user) {
+      data = await getDataByUser(user);
+    } else {
+      data = await getData();
+    }
+
     res.status(200).json(data);
   } catch (error) {
     res.send(`ERROR ${error}`);
@@ -347,8 +437,8 @@ app.post("/", async function (req, res) {
     const job = await createJob(jobName, frequency, jobDataJson);
 
     const createdAt = bigquery.timestamp(new Date()).value;
-    const data = { id, createdAt, ...req.body, job };
-    await add(data);
+    const data = { id, createdAt, ...req.body, ...job };
+    await addBot(data);
 
     res.status(200).json(data);
   } catch (error) {
