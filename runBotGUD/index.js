@@ -104,13 +104,20 @@ const runProcess = async (id, botId) => {
   console.log("RUNPROCESS: ", bot);
   const minimumNumber = bot && bot?.minimumNumber ? bot?.minimumNumber : 0;
 
+  // SELECT campagin_id, MAX(\` campagin_name\`) as campagin_name, group_id, MAX(group_name) as gruop_name, count(*) as headline, count(*) - ${minimumNumber} as diff, IF(count(*)>${minimumNumber}, "Headlines missing","No Issues") as status
+  //   FROM \`cald-ads-qa.AssetTest.CampaingAssets\`
+  //   WHERE asset_type = "Headline"
+  //   GROUP BY campagin_id, group_id
+  //   ORDER BY campagin_id, group_id`;
+
   try {
     const query = `
-    SELECT campagin_id, MAX(\` campagin_name\`) as campagin_name, group_id, MAX(group_name) as gruop_name, count(*) as headline, count(*) - ${minimumNumber} as diff, IF(count(*)>${minimumNumber}, "Headlines missing","No Issues") as status 
-    FROM \`cald-ads-qa.AssetTest.CampaingAssets\`
-    WHERE asset_type = "Headline"
-    GROUP BY campagin_id, group_id
-    ORDER BY campagin_id, group_id`;
+    SELECT date, group_id, MAX(group_name) as group_name, campaign_id, MAX(campaign_name) as campaign_name, customer_id , asset_type, MAX(group_asset_resource_id) as resource_id, count(*) as headline, ${minimumNumber} - count(*) as diff,  IF(count(*) < ${minimumNumber}, "Headlines missing","No Issues") as status 
+    FROM \`cald-ads-qa.AssetTest.assets-view\`
+    where  date = "2025-01-13" and
+           asset_type = "HEADLINE"
+    group by group_id, campaign_id, asset_type, customer_id,  date
+    order by date, group_id, campaign_id, asset_type desc`;
 
     const options = {
       query: query,
@@ -124,9 +131,13 @@ const runProcess = async (id, botId) => {
     // Wait for the query to finish
     const [rows] = await job.getQueryResults();
 
-    addRunLogDetail(id, rows);
+    await addRunLogDetail(id, rows);
 
-    updateRunLog(id, "DONE");
+    // update status
+    let issuesCount = 0;
+    rows.forEach((row) => (issuesCount += row.diff > 0 ? 1 : 0));
+    const issuesMsg = issuesCount === 0 ? "No issues" : `${issuesCount} issues`;
+    await updateRunLog(id, issuesMsg);
 
     console.log(rows);
   } catch (error) {
