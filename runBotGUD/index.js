@@ -37,10 +37,11 @@ const addRunLog = async (data) => {
   // Wait for the query to finish
   await job.getQueryResults();
 };
-const updateRunLog = async (id, status) => {
+const updateRunLog = async (id, status, error) => {
   const query = `
   UPDATE ${PROJECTID}.${DATA_SOURCE}.${TABLE}
-  SET status = "${status}"
+  SET status = "${status}",
+      error = "${error}"
   WHERE id = "${id}"`;
 
   // create query
@@ -58,11 +59,11 @@ const addRunLogDetail = async (id, rows) => {
   if (rows.length > 0) {
     console.log(`Insert RUNLOG DETAILS ...`, rows);
     let insert = `INSERT INTO ${PROJECTID}.${DATA_SOURCE}.${TABLE_RUNLOG_DETAIL}
-    (id, campagin_id, campagin_name, group_id, gruop_name, count, diff, status) VALUES `;
+    (id, campagin_id, campagin_name, group_id, group_name, count, diff, status, resource_id ) VALUES `;
 
     let values = "";
     rows.forEach((row, index) => {
-      values += `("${id}", "${row.campagin_id}", "${row.campagin_name}", "${row.group_id}", "${row.gruop_name}", ${row.headline}, ${row?.diff}, "${row?.status}")`;
+      values += `("${id}", "${row.campagin_id}", "${row.campagin_name}", "${row.group_id}", "${row.group_name}", ${row.headline}, ${row?.diff}, "${row?.status}", "${row?.resource_id}")`;
       index < rows.length - 1 ? (values += ",") : (values += "");
     });
 
@@ -73,6 +74,30 @@ const addRunLogDetail = async (id, rows) => {
     await i.getQueryResults();
     console.log(`Inserted RUNLOG DETAILS`);
   }
+};
+
+const genenateNextLogId = async (user, rule) => {
+  const tableBot = `${PROJECTID}.${DATA_SOURCE}.${TABLE}`;
+
+  const query = `
+    SELECT count(*) as id 
+    FROM ${tableBot} as logs
+    where rule = "${rule}" and
+          user = "${user}"`;
+
+  console.log(query);
+
+  const options = {
+    query: query,
+    location: "US",
+  };
+
+  // create query
+  const [job] = await bigquery.createQueryJob(options);
+  // Wait for the query to finish
+  const [rows] = await job.getQueryResults();
+
+  return rows[0].id + 1 ?? null;
 };
 
 const getDataById = async (id) => {
@@ -136,8 +161,8 @@ const runProcess = async (id, botId) => {
     // update status
     let issuesCount = 0;
     rows.forEach((row) => (issuesCount += row.diff > 0 ? 1 : 0));
-    const issuesMsg = issuesCount === 0 ? "No issues" : `${issuesCount} issues`;
-    await updateRunLog(id, issuesMsg);
+    const issuesMsg = issuesCount === 0 ? "NO_FOUND_ISSUES" : "FOUND_ISSUES";
+    await updateRunLog(id, issuesMsg, issuesCount);
 
     console.log(rows);
   } catch (error) {
@@ -153,7 +178,10 @@ functions.cloudEvent("runBotGUD", async (cloudEvent) => {
 
   try {
     const dataJson = JSON.parse(data);
-    const id = v4();
+    // const id = v4();
+
+    const logId = await genenateNextLogId(dataJson?.user, dataJson?.rule);
+    const id = dataJson?.rule + "-" + logId.toString().padStart(4, "0");
     await addRunLog({
       id,
       createdAt: bigquery.timestamp(new Date()).value,
