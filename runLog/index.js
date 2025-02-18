@@ -61,7 +61,7 @@ const getDataById = async (id) => {
 const getDataByUser = async (user) => {
   const table = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RUNLOG}`;
 
-  const query = `SELECT id, FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%E3SZ', createdAt) AS createdAt, user, rule, status, error, botId
+  const query = `SELECT id, idLabel, FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%E3SZ', createdAt) AS createdAt, user, rule, status, error, botId
    FROM ${table}
    WHERE user = "${user}"
    ORDER BY createdAt DESC`;

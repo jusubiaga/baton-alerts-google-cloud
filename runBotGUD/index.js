@@ -16,8 +16,9 @@ const bigquery = new BigQuery({ projectId: PROJECTID });
 const addRunLog = async (data) => {
   const query = `
   INSERT INTO  ${PROJECTID}.${DATA_SOURCE}.${TABLE}
-  (id, createdAt, user, rule, botId, status, error)
+  (id, idLabel, createdAt, user, rule, botId, status, error)
   VALUES ("${data.id}",
+      "${data.idLabel}", 
       "${data.createdAt}",
       "${data.user}",
       "${data.rule}",
@@ -76,7 +77,7 @@ const addRunLogDetail = async (id, rows) => {
   }
 };
 
-const genenateNextLogId = async (user, rule) => {
+const generateNextLogIdLabel = async (user, rule) => {
   const tableBot = `${PROJECTID}.${DATA_SOURCE}.${TABLE}`;
 
   const query = `
@@ -137,7 +138,7 @@ const runProcess = async (id, botId) => {
 
   try {
     const query = `
-    SELECT date, group_id, MAX(group_name) as group_name, campaign_id, MAX(campaign_name) as campaign_name, customer_id , asset_type, MAX(group_asset_resource_id) as resource_id, count(*) as headline, ${minimumNumber} - count(*) as diff,  IF(count(*) < ${minimumNumber}, "Headlines missing","No Issues") as status 
+    SELECT date, group_id, MAX(group_name) as group_name, campaign_id, MAX(campaign_name) as campaign_name, customer_id , asset_type, MAX(group_asset_resource_id) as resource_id, count(*) as headline, ${minimumNumber} - count(*) as diff,  IF(${minimumNumber} < count(*), "FOUND_ISSUES","NO_FOUND_ISSUES") as status 
     FROM \`cald-ads-qa.AssetTest.assets-view\`
     where  date = "2025-01-13" and
            asset_type = "HEADLINE"
@@ -178,12 +179,13 @@ functions.cloudEvent("runBotGUD", async (cloudEvent) => {
 
   try {
     const dataJson = JSON.parse(data);
-    // const id = v4();
+    const id = v4();
 
-    const logId = await genenateNextLogId(dataJson?.user, dataJson?.rule);
-    const id = dataJson?.rule + "-" + logId.toString().padStart(4, "0");
+    const logId = await generateNextLogIdLabel(dataJson?.user, dataJson?.rule);
+    const idLabel = dataJson?.rule + "-" + logId.toString().padStart(4, "0");
     await addRunLog({
       id,
+      idLabel,
       createdAt: bigquery.timestamp(new Date()).value,
       user: dataJson?.user,
       rule: dataJson?.rule,
