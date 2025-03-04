@@ -127,10 +127,15 @@ paths:
             type: string
   /rules:
     get:
-      summary: get rules type
+      summary: get rules
       operationId: rules
       x-google-backend:
         address: https://us-central1-cald-ads-qa.cloudfunctions.net/rules
+      parameters:
+        - name: "user"
+          in: "query"
+          required: false
+          type: "string"
       responses:
         "200":
           description: A successful response

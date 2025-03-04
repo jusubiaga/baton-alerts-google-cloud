@@ -138,7 +138,7 @@ const runProcess = async (id, botId) => {
 
   try {
     const query = `
-    SELECT date, group_id, MAX(group_name) as group_name, campaign_id, MAX(campaign_name) as campaign_name, customer_id , asset_type, MAX(group_asset_resource_id) as resource_id, count(*) as headline, ${minimumNumber} - count(*) as diff,  IF(${minimumNumber} < count(*), "FOUND_ISSUES","NO_FOUND_ISSUES") as status 
+    SELECT date, group_id, MAX(group_name) as group_name, campaign_id, MAX(campaign_name) as campaign_name, customer_id , asset_type, MAX(group_asset_resource_id) as resource_id, count(*) as headline, ${minimumNumber} - count(*) as diff,  IF(${minimumNumber} > count(*), "FOUND_ISSUES","NO_FOUND_ISSUES") as status 
     FROM \`cald-ads-qa.AssetTest.assets-view\`
     where  date = "2025-01-13" and
            asset_type = "HEADLINE"
