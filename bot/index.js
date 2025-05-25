@@ -427,8 +427,6 @@ app.post("/", async function (req, res) {
   console.log("Waiting ...");
 
   try {
-    // await getFuntion(`projects/${PROJECTID}/locations/${LOCATION}/functions/${rule}`);
-
     const id = v4();
 
     const jobDataJson = { id, user, rule };
