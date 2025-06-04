@@ -14,14 +14,14 @@ const TABLE_BOTS = "bots";
 
 const bigquery = new BigQuery({ projectId: PROJECTID });
 
-const getDataByUser = async (user) => {
+const getDataByWorkspace = async (workspace) => {
   const tableRules = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RUlES}`;
   const tableBots = `${PROJECTID}.${DATA_SOURCE}.${TABLE_BOTS}`;
 
-  const query = `WITH user_bots AS (
+  const query = `WITH workspace_bots AS (
   SELECT rule
   FROM ${tableBots}
-  WHERE user = "${user}"
+  WHERE workspace = "${workspace}"
 )
 
 SELECT 
@@ -34,7 +34,7 @@ SELECT
     ELSE FALSE 
   END AS installed
 FROM ${tableRules} r
-LEFT JOIN user_bots ub 
+LEFT JOIN workspace_bots ub 
   ON r.id = ub.rule;`;
 
   console.log(query);
@@ -75,10 +75,10 @@ const getData = async () => {
 
 app.get("/", async function (req, res) {
   try {
-    const { user } = req.query;
-    if (user) {
-      const dataByUser = await getDataByUser(user);
-      res.status(200).json(dataByUser);
+    const { workspace, user } = req.query;
+    if (workspace) {
+      const dataByWorkspace = await getDataByWorkspace(workspace);
+      res.status(200).json(dataByWorkspace);
     } else {
       const data = await getData();
       res.status(200).json(data);

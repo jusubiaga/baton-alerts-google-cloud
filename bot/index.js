@@ -33,7 +33,7 @@ const getData = async () => {
   const tableRules = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RULES}`;
 
   const query = `
-SELECT bots.id as id, rule, frequency, user, name, description, avatar, job, minimumNumber  
+SELECT bots.id as id, rule, frequency, user, name, description, avatar, job, minimumNumber, workspace  
 FROM ${tableBot} as bots
 LEFT JOIN ${tableRules} as rules ON
 bots.rule = rules.id`;
@@ -61,7 +61,7 @@ const getDataByUser = async (user) => {
   const tableRules = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RULES}`;
 
   const query = `
-    SELECT bots.id as id, rule, frequency, user, name, description, avatar, job, minimumNumber 
+    SELECT bots.id as id, rule, frequency, user, name, description, avatar, job, minimumNumber, workspace 
     FROM ${tableBot} as bots
     JOIN ${tableRules} as rules ON
     bots.rule = rules.id AND
@@ -94,12 +94,47 @@ const getDataByUser = async (user) => {
   return result;
 };
 
+getDataByWorkspace = async (workspace) => {
+  const tableBot = `${PROJECTID}.${DATA_SOURCE}.${TABLE}`;
+  const tableRules = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RULES}`;
+
+  const query = `
+    SELECT bots.id as id, rule, frequency, user, name, description, avatar, job, minimumNumber, workspace 
+    FROM ${tableBot} as bots
+    JOIN ${tableRules} as rules ON
+    bots.rule = rules.id AND
+    bots.workspace = "${workspace}"`;
+
+  console.log(query);
+
+  const options = {
+    query: query,
+    location: "US",
+  };
+
+  // create query
+  const [job] = await bigquery.createQueryJob(options);
+  // Wait for the query to finish
+  const [rows] = await job.getQueryResults();
+
+  const result = await Promise.all(
+    rows.map(async (row) => {
+      const jobData = await getJob(row.job);
+      const data = { ...row, ...jobData };
+      console.log("DATA: ", data);
+      return data;
+    })
+  );
+
+  return result;
+};
+
 const getDataById = async (id) => {
   const tableBot = `${PROJECTID}.${DATA_SOURCE}.${TABLE}`;
   const tableRules = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RULES}`;
 
   const query = `
-    SELECT bots.id as id, rule, frequency, user, name, description, avatar, job, minimumNumber  
+    SELECT bots.id as id, rule, frequency, user, name, description, avatar, job, minimumNumber, workspace  
     FROM ${tableBot} as bots
     LEFT JOIN ${tableRules} as rules ON
     bots.rule = rules.id
@@ -124,10 +159,11 @@ const addBot = async (data) => {
   console.log("DATA:", data);
   const query = `
   INSERT INTO  ${PROJECTID}.${DATA_SOURCE}.${TABLE}
-  (id, createdAt, user, rule, frequency, job)
+  (id, createdAt, user, workspace, rule, frequency, job)
   VALUES ("${data.id}",
       "${data.createdAt}",
       "${data.user}",
+      "${data.workspace}",
       "${data.rule}",
       "${data?.schedule ?? ""}",
       "${data?.job ?? ""}")`;
@@ -310,8 +346,8 @@ const updateBot = async (id, data) => {
   // create new job
   if (!bot?.job) {
     console.log("updateBot: creating job");
-    const jobDataJson = { id: bot.id, user: bot.user, rule: bot.rule };
-    const jobName = `${bot.user}-${bot.rule}`;
+    const jobDataJson = { id: bot.id, user: bot.user, workspace: bot.workspace, rule: bot.rule };
+    const jobName = `${bot.workspace}-${bot.user}-${bot.rule}`;
     dataJob = await createJob(jobName, frequency, jobDataJson);
   } else {
     // update job
@@ -394,10 +430,15 @@ const runBot = async (id) => {
 // ROUTES
 app.get("/", async function (req, res) {
   const { user } = req.query;
+  const { workspace } = req.query;
+
   let data;
   try {
     if (user) {
       data = await getDataByUser(user);
+    }
+    if (workspace) {
+      data = await getDataByWorkspace(workspace);
     } else {
       data = await getData();
     }
@@ -422,16 +463,16 @@ app.get("/:id", async function (req, res) {
 });
 
 app.post("/", async function (req, res) {
-  const { rule, user, frequency } = req.body;
+  const { rule, user, workspace, frequency } = req.body;
 
   console.log("Waiting ...");
 
   try {
     const id = v4();
 
-    const jobDataJson = { id, user, rule };
+    const jobDataJson = { id, user, workspace, rule };
 
-    const jobName = `${user}-${rule}`;
+    const jobName = `${workspace}-${user}-${rule}`;
     const job = await createJob(jobName, frequency, jobDataJson);
 
     const createdAt = bigquery.timestamp(new Date()).value;
