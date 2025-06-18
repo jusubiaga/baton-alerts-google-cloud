@@ -16,7 +16,7 @@ const bigquery = new BigQuery({ projectId: PROJECTID });
 const addRunLog = async (data) => {
   const query = `
   INSERT INTO  ${PROJECTID}.${DATA_SOURCE}.${TABLE}
-  (id, idLabel, createdAt, user, rule, botId, status, error)
+  (id, idLabel, createdAt, user, rule, botId, status, error, workspace)
   VALUES ("${data.id}",
       "${data.idLabel}", 
       "${data.createdAt}",
@@ -24,7 +24,8 @@ const addRunLog = async (data) => {
       "${data.rule}",
       "${data.botId}",
       "${data.status}",
-      "${data.error}")`;
+      "${data.error}",
+      "${data.workspace}")`;
 
   const options = {
     query: query,
@@ -77,14 +78,14 @@ const addRunLogDetail = async (id, rows) => {
   }
 };
 
-const generateNextLogIdLabel = async (user, rule) => {
+const generateNextLogIdLabel = async (workspace, rule) => {
   const tableBot = `${PROJECTID}.${DATA_SOURCE}.${TABLE}`;
 
   const query = `
     SELECT count(*) as id 
     FROM ${tableBot} as logs
     where rule = "${rule}" and
-          user = "${user}"`;
+          workspace = "${workspace}"`;
 
   console.log(query);
 
@@ -181,13 +182,14 @@ functions.cloudEvent("runBotGUD", async (cloudEvent) => {
     const dataJson = JSON.parse(data);
     const id = v4();
 
-    const logId = await generateNextLogIdLabel(dataJson?.user, dataJson?.rule);
+    const logId = await generateNextLogIdLabel(dataJson?.workspace, dataJson?.rule);
     const idLabel = dataJson?.rule + "-" + logId.toString().padStart(4, "0");
     await addRunLog({
       id,
       idLabel,
       createdAt: bigquery.timestamp(new Date()).value,
       user: dataJson?.user,
+      workspace: dataJson?.workspace,
       rule: dataJson?.rule,
       botId: dataJson?.id,
       status: "RUNNING",

@@ -81,13 +81,40 @@ const getDataByUser = async (user) => {
   return rows;
 };
 
+const getDataByWorkspace = async (workspace) => {
+  const table = `${PROJECTID}.${DATA_SOURCE}.${TABLE_RUNLOG}`;
+
+  const query = `SELECT id, idLabel, FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%E3SZ', createdAt) AS createdAt, user, rule, status, error, botId
+   FROM ${table}
+   WHERE workspace = "${workspace}"
+   ORDER BY createdAt DESC`;
+
+  console.log(query);
+
+  const options = {
+    query: query,
+    location: "US",
+  };
+
+  // create query
+  const [job] = await bigquery.createQueryJob(options);
+  // Wait for the query to finish
+  const [rows] = await job.getQueryResults();
+
+  return rows;
+};
+
 app.get("/", async function (req, res) {
-  const { user } = req.query;
+  const { user, workspace } = req.query;
 
   try {
     // const { user, integrationType } = req.query;
     if (user) {
       const data = await getDataByUser(user);
+      res.status(200).json(data);
+    }
+    if (workspace) {
+      const data = await getDataByWorkspace(workspace);
       res.status(200).json(data);
     } else {
       const data = await getData();
